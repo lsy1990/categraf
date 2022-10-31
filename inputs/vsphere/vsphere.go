@@ -15,7 +15,6 @@ import (
 
 const inputName = "vsphere"
 
-
 // VSphere is the top level type for the vSphere input plugin. It contains all the configuration
 // and a list of connected vSphere endpoints
 type VSphere struct {
@@ -134,52 +133,53 @@ func (ins *Instance) Init() error {
 	if ins.CustomAttributeExclude == nil {
 		ins.CustomAttributeExclude = []string{"*"}
 	}
-	if  ins.IPAddresses == nil {
+	if ins.IPAddresses == nil {
 		ins.IPAddresses = []string{"ipv4"}
 	}
 
-	if ins.MaxQueryObjects <=0 {
+	if ins.MaxQueryObjects <= 0 {
 		ins.MaxQueryObjects = 256
 	}
-	if ins.MaxQueryMetrics <=0 {
+	if ins.MaxQueryMetrics <= 0 {
 		ins.MaxQueryMetrics = 256
 	}
 
-	if ins.CollectConcurrency <=0 {
+	if ins.CollectConcurrency <= 0 {
 		ins.CollectConcurrency = 1
 	}
-	if ins.DiscoverConcurrency <=0 {
+	if ins.DiscoverConcurrency <= 0 {
 		ins.DiscoverConcurrency = 1
 	}
-	if ins.MetricLookback <=0 {
+	if ins.MetricLookback <= 0 {
 		ins.MetricLookback = 3
 	}
-	if ins.ObjectDiscoveryInterval ==0 {
+	if ins.ObjectDiscoveryInterval == 0 {
 		ins.ObjectDiscoveryInterval = config.Duration(time.Second * 300)
 	}
-	if ins.Timeout ==0 {
+	if ins.Timeout == 0 {
 		ins.Timeout = config.Duration(time.Second * 60)
 	}
-	if ins.HistoricalInterval ==0 {
+	if ins.HistoricalInterval == 0 {
 		ins.HistoricalInterval = config.Duration(time.Second * 300)
 	}
-	log.Println("I! Starting plugin")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	ins.cancel = cancel
 
 	// Create endpoints, one for each vCenter we're monitoring
 	u, err := soap.ParseURL(ins.Vcenter)
 	if err != nil {
+		log.Println("E! soap.ParseURL", err)
 		return err
 	}
 	ep, err := NewEndpoint(ctx, ins, u)
 	if err != nil {
+		log.Println("E! NewEndpoint", err)
 		return err
 	}
 	ins.endpoints = ep
 	return nil
 }
-
 
 func (v *Instance) Drop() {
 	log.Printf("I! Stopping plugin")
@@ -200,7 +200,7 @@ func (v *Instance) Drop() {
 
 // Gather is the main data collection function called by the Telegraf core. It performs all
 // the data collection and writes all metrics into the Accumulator passed as an argument.
-func (ins *Instance) Gather(slist *types.SampleList)  {
+func (ins *Instance) Gather(slist *types.SampleList) {
 	err := ins.endpoints.Collect(context.Background(), slist)
 	if err == context.Canceled {
 		// No need to signal errors if we were merely canceled.
@@ -208,8 +208,7 @@ func (ins *Instance) Gather(slist *types.SampleList)  {
 	}
 	if err != nil {
 		//acc.AddError(err)
-		log.Printf("E! fail to gather\n",err)
+		log.Printf("E! fail to gather\n", err)
 	}
 
 }
-

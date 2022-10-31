@@ -256,7 +256,7 @@ func newFilterOrPanic(include []string, exclude []string) filter.Filter {
 	f, err := filter.NewIncludeExcludeFilter(include, exclude)
 	if err != nil {
 		log.Printf("E! Include/exclude filters are invalid: ", err)
-		return  nil
+		return nil
 	}
 	return f
 }
