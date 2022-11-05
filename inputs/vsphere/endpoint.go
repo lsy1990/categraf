@@ -1239,13 +1239,12 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 		}
 		// We've iterated through all the metrics and collected buckets for each
 		// measurement name. Now emit them!
-		//for _, bucket := range buckets {
-		//	//acc.AddFields(bucket.name, bucket.fields, bucket.tags, bucket.ts)
-		//	for _,field:=range bucket.fields {
-		//		//slist.PushFront(types.NewSample(inputName, bucket.name+"_"+field, bucket.ts, bucket.tags))
-		//	}
-		//	//
-		//}
+		for _, bucket := range buckets {
+			//acc.AddFields(bucket.name, bucket.fields, bucket.tags, bucket.ts)
+			for k,field:=range bucket.fields {
+				slist.PushFront(types.NewSample(inputName,bucket.name+"_"+k,field,  bucket.tags))
+			}
+		}
 	}
 	return count, latestSample, nil
 }
