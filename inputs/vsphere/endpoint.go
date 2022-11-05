@@ -473,6 +473,7 @@ func (e *Endpoint) discover(ctx context.Context) error {
 			newObjects[k] = objects
 
 			//SendInternalCounterWithTags("discovered_objects", e.URL.Host, map[string]string{"type": res.name}, int64(len(objects)))
+			log.Printf("discovered_objects  type is : %s   and number is : %d ", res.name, int64(len(objects)))
 			numRes += int64(len(objects))
 		}
 	}
@@ -513,6 +514,7 @@ func (e *Endpoint) discover(ctx context.Context) error {
 
 	//sw.Stop()
 	//SendInternalCounterWithTags("discovered_objects", e.URL.Host, map[string]string{"type": "instance-total"}, numRes)
+	log.Printf("discovered_objects  type is : %s   and number is : %d ", "instance-total", numRes)
 	return nil
 }
 
@@ -1097,6 +1099,8 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 	}
 	//sw.Stop()
 	//SendInternalCounterWithTags("gather_count", e.URL.Host, internalTags, count)
+	log.Printf("discovered_objects  type is : %s   and number is : %d ", resourceType, count)
+
 	return nil
 }
 
@@ -1241,8 +1245,8 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 		// measurement name. Now emit them!
 		for _, bucket := range buckets {
 			//acc.AddFields(bucket.name, bucket.fields, bucket.tags, bucket.ts)
-			for k,field:=range bucket.fields {
-				slist.PushFront(types.NewSample(inputName,bucket.name+"_"+k,field,  bucket.tags))
+			for k, field := range bucket.fields {
+				slist.PushFront(types.NewSample(inputName, bucket.name+"_"+k, field, bucket.tags))
 			}
 		}
 	}
