@@ -421,8 +421,6 @@ func (e *Endpoint) discover(ctx context.Context) error {
 		return err
 	}
 
-	//sw := NewStopwatch("discover", e.URL.Host)
-
 	client, err := e.clientFactory.GetClient(ctx)
 	if err != nil {
 		return err
@@ -472,7 +470,6 @@ func (e *Endpoint) discover(ctx context.Context) error {
 			}
 			newObjects[k] = objects
 
-			//SendInternalCounterWithTags("discovered_objects", e.URL.Host, map[string]string{"type": res.name}, int64(len(objects)))
 			log.Printf("discovered_objects  type is : %s   and number is : %d ", res.name, int64(len(objects)))
 			numRes += int64(len(objects))
 		}
@@ -512,8 +509,6 @@ func (e *Endpoint) discover(ctx context.Context) error {
 		e.customFields = fields
 	}
 
-	//sw.Stop()
-	//SendInternalCounterWithTags("discovered_objects", e.URL.Host, map[string]string{"type": "instance-total"}, numRes)
 	log.Printf("discovered_objects  type is : %s   and number is : %d ", "instance-total", numRes)
 	return nil
 }
@@ -1063,10 +1058,6 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 	} else {
 		latest = now.Add(time.Duration(-res.sampling) * time.Second)
 	}
-
-	//internalTags := map[string]string{"resourcetype": resourceType}
-	//sw := NewStopwatchWithTags("gather_duration", e.URL.Host, internalTags)
-
 	log.Printf("D! Collecting metrics for %d objects of type %s for %s",
 		len(res.objects), resourceType, e.URL.Host)
 
@@ -1097,8 +1088,6 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 	if !latestSample.IsZero() {
 		res.latestSample = latestSample
 	}
-	//sw.Stop()
-	//SendInternalCounterWithTags("gather_count", e.URL.Host, internalTags, count)
 	log.Printf("discovered_objects  type is : %s   and number is : %d ", resourceType, count)
 
 	return nil
