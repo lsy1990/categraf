@@ -1143,7 +1143,7 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 	latestSample := time.Time{}
 	count := 0
 	resourceType := res.name
-	prefix := "vsphere" + e.Parent.Separator + resourceType
+	prefix := resourceType
 
 	client, err := e.clientFactory.GetClient(ctx)
 	if err != nil {
