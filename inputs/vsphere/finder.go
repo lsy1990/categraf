@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"reflect"
 	"strings"
@@ -201,12 +202,12 @@ func (f *Finder) descend(ctx context.Context, root types.ManagedObjectReference,
 func objectContentToTypedArray(objs map[string]types.ObjectContent, dst interface{}) error {
 	rt := reflect.TypeOf(dst)
 	if rt == nil || rt.Kind() != reflect.Ptr {
-		panic("need pointer")
+		return fmt.Errorf("need pointer")
 	}
 
 	rv := reflect.ValueOf(dst).Elem()
 	if !rv.CanSet() {
-		panic("cannot set dst")
+		return fmt.Errorf("cannot set dst")
 	}
 	for _, p := range objs {
 		v, err := mo.ObjectContentToType(p)

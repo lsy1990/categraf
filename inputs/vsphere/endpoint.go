@@ -615,6 +615,7 @@ func getDatacenters(ctx context.Context, e *Endpoint, resourceFilter *ResourceFi
 	defer cancel1()
 	err := resourceFilter.FindAll(ctx1, &resources)
 	if err != nil {
+		log.Println("E! getDatacenters resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	m := make(objectMap, len(resources))
@@ -636,6 +637,7 @@ func getClusters(ctx context.Context, e *Endpoint, resourceFilter *ResourceFilte
 	defer cancel1()
 	err := resourceFilter.FindAll(ctx1, &resources)
 	if err != nil {
+		log.Println("E! getClusters resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	cache := make(map[string]*gtypes.ManagedObjectReference)
@@ -686,6 +688,7 @@ func getResourcePools(ctx context.Context, e *Endpoint, resourceFilter *Resource
 	var resources []mo.ResourcePool
 	err := resourceFilter.FindAll(ctx, &resources)
 	if err != nil {
+		log.Println("E! getResourcePools resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	m := make(objectMap)
@@ -715,6 +718,7 @@ func getHosts(ctx context.Context, e *Endpoint, resourceFilter *ResourceFilter) 
 	var resources []mo.HostSystem
 	err := resourceFilter.FindAll(ctx, &resources)
 	if err != nil {
+		log.Println("E! getHosts resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	m := make(objectMap)
@@ -735,6 +739,7 @@ func getVMs(ctx context.Context, e *Endpoint, resourceFilter *ResourceFilter) (o
 	defer cancel1()
 	err := resourceFilter.FindAll(ctx1, &resources)
 	if err != nil {
+		log.Println("E! getVMs resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	m := make(objectMap)
@@ -842,6 +847,7 @@ func getDatastores(ctx context.Context, e *Endpoint, resourceFilter *ResourceFil
 	defer cancel1()
 	err := resourceFilter.FindAll(ctx1, &resources)
 	if err != nil {
+		log.Println("E! getDatastores resourceFilter.FindAll Error:", err.Error())
 		return nil, err
 	}
 	m := make(objectMap)
@@ -1045,16 +1051,12 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 		log.Printf("D! collectResource  %s ", resourceType)
 	}
 	if err != nil {
-		if config.Config.DebugMode {
-			log.Printf("D! collectResource  Error: %s ", err.Error())
-		}
+		log.Println("E! collectResource  Error: ", err.Error())
 		return err
 	}
 	now, err := client.GetServerTime(ctx)
 	if err != nil {
-		if config.Config.DebugMode {
-			log.Printf("D! GetServerTime  Error %s ", err.Error())
-		}
+		log.Println("E! GetServerTime  Error : ", err.Error())
 		return err
 	}
 
