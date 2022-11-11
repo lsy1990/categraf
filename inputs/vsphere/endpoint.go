@@ -19,6 +19,7 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 	gtypes "github.com/vmware/govmomi/vim25/types"
 
+	"flashcat.cloud/categraf/config"
 	"flashcat.cloud/categraf/pkg/filter"
 	"flashcat.cloud/categraf/types"
 )
@@ -396,7 +397,10 @@ func (e *Endpoint) getAncestorName(ctx context.Context, client *Client, resource
 				return true
 			}
 			if result.Parent == nil {
-				log.Printf("D! No parent found for %s (ascending from %s)", here.Reference(), r.Reference())
+				if config.Config.DebugMode {
+					log.Printf("D! No parent found for %s (ascending from %s)", here.Reference(), r.Reference())
+				}
+
 				return true
 			}
 			here = result.Parent.Reference()
@@ -425,8 +429,9 @@ func (e *Endpoint) discover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	log.Printf("D! Discover new objects for %s", e.URL.Host)
+	if config.Config.DebugMode {
+		log.Printf("D! Discover new objects for %s", e.URL.Host)
+	}
 	dcNameCache := make(map[string]string)
 
 	numRes := int64(0)
@@ -434,7 +439,9 @@ func (e *Endpoint) discover(ctx context.Context) error {
 	// Populate resource objects, and endpoint instance info.
 	newObjects := make(map[string]objectMap)
 	for k, res := range e.resourceKinds {
-		log.Printf("D! Discovering resources for %s", res.name)
+		if config.Config.DebugMode {
+			log.Printf("D! Discovering resources for %s", res.name)
+		}
 		// Need to do this for all resource types even if they are not enabled
 		if res.enabled || k != "vm" {
 			rf := ResourceFilter{
@@ -469,8 +476,9 @@ func (e *Endpoint) discover(ctx context.Context) error {
 				}
 			}
 			newObjects[k] = objects
-
-			log.Printf("discovered_objects  type is : %s   and number is : %d ", res.name, int64(len(objects)))
+			if config.Config.DebugMode {
+				log.Printf("D! discovered_objects  type is : %s   and number is : %d ", res.name, int64(len(objects)))
+			}
 			numRes += int64(len(objects))
 		}
 	}
@@ -491,7 +499,7 @@ func (e *Endpoint) discover(ctx context.Context) error {
 	if e.customAttrEnabled {
 		fields, err = client.GetCustomFields(ctx)
 		if err != nil {
-			log.Printf("W! Could not load custom field metadata")
+			log.Printf("W! Could not load custom field metadata ,Error:  %s", err.Error())
 			fields = nil
 		}
 	}
@@ -508,13 +516,16 @@ func (e *Endpoint) discover(ctx context.Context) error {
 	if fields != nil {
 		e.customFields = fields
 	}
-
-	log.Printf("discovered_objects  type is : %s   and number is : %d ", "instance-total", numRes)
+	if config.Config.DebugMode {
+		log.Printf("D! discovered_objects  type is : %s   and number is : %d ", "instance-total", numRes)
+	}
 	return nil
 }
 
 func (e *Endpoint) simpleMetadataSelect(ctx context.Context, client *Client, res *resourceKind) {
-	log.Printf("D! Using fast metric metadata selection for %s", res.name)
+	if config.Config.DebugMode {
+		log.Printf("D! Using fast metric metadata selection for %s", res.name)
+	}
 	m, err := client.CounterInfoByName(ctx)
 	if err != nil {
 		log.Printf("E! Getting metric metadata. Discovery will be incomplete. Error: %s", err.Error())
@@ -579,7 +590,9 @@ func (e *Endpoint) complexMetadataSelect(ctx context.Context, res *resourceKind,
 						mMap[strconv.Itoa(int(m.CounterId))+"|"+m.Instance] = m
 					}
 				}
-				log.Printf("D!Found %d metrics for %s", len(mMap), obj.name)
+				if config.Config.DebugMode {
+					log.Printf("D!Found %d metrics for %s", len(mMap), obj.name)
+				}
 				instInfoMux.Lock()
 				defer instInfoMux.Unlock()
 				if len(mMap) > len(res.metrics) {
@@ -952,7 +965,9 @@ func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Tim
 			// Determine time of last successful collection
 			metricName := e.getMetricNameForID(metric.CounterId)
 			if metricName == "" {
-				log.Printf("D! Unable to find metric name for id %d. Skipping!", metric.CounterId)
+				if config.Config.DebugMode {
+					log.Printf("D! Unable to find metric name for id %d. Skipping!", metric.CounterId)
+				}
 				continue
 			}
 			start, ok := e.hwMarks.Get(obj.ref.Value, metricName)
@@ -982,8 +997,10 @@ func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Tim
 			// Bucket filled to capacity?
 			// OR if we're past the absolute maximum limit
 			if (!res.realTime && len(bucket.MetricId) >= maxMetrics) || len(bucket.MetricId) > maxRealtimeMetrics {
-				log.Printf("D! Submitting partial query: %d metrics (%d remaining) of type %s for %s. Total objects %d",
-					len(bucket.MetricId), len(res.metrics)-metricIdx, res.name, e.URL.Host, len(res.objects))
+				if config.Config.DebugMode {
+					log.Printf("D! Submitting partial query: %d metrics (%d remaining) of type %s for %s. Total objects %d",
+						len(bucket.MetricId), len(res.metrics)-metricIdx, res.name, e.URL.Host, len(res.objects))
+				}
 
 				// Don't send work items if the context has been cancelled.
 				if ctx.Err() == context.Canceled {
@@ -1000,7 +1017,9 @@ func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Tim
 			pqs = append(pqs, *bucket)
 			numQs += len(bucket.MetricId)
 			if (!res.realTime && numQs > e.Parent.MaxQueryObjects) || numQs > maxRealtimeMetrics {
-				log.Printf("D! Submitting final bucket job for %s: %d metrics", res.name, numQs)
+				if config.Config.DebugMode {
+					log.Printf("D! Submitting final bucket job for %s: %d metrics", res.name, numQs)
+				}
 				submitChunkJob(ctx, te, job, pqs)
 				pqs = make(queryChunk, 0, e.Parent.MaxQueryObjects)
 				numQs = 0
@@ -1009,7 +1028,9 @@ func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Tim
 	}
 	// Submit any jobs left in the queue
 	if len(pqs) > 0 {
-		log.Printf("D! Submitting job for %s: %d objects, %d metrics", res.name, len(pqs), numQs)
+		if config.Config.DebugMode {
+			log.Printf("D! Submitting job for %s: %d objects, %d metrics", res.name, len(pqs), numQs)
+		}
 		submitChunkJob(ctx, te, job, pqs)
 	}
 
@@ -1020,11 +1041,20 @@ func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Tim
 func (e *Endpoint) collectResource(ctx context.Context, resourceType string, slist *types.SampleList) error {
 	res := e.resourceKinds[resourceType]
 	client, err := e.clientFactory.GetClient(ctx)
+	if config.Config.DebugMode {
+		log.Printf("D! collectResource  %s ", resourceType)
+	}
 	if err != nil {
+		if config.Config.DebugMode {
+			log.Printf("D! collectResource  Error: %s ", err.Error())
+		}
 		return err
 	}
 	now, err := client.GetServerTime(ctx)
 	if err != nil {
+		if config.Config.DebugMode {
+			log.Printf("D! GetServerTime  Error %s ", err.Error())
+		}
 		return err
 	}
 
@@ -1040,26 +1070,36 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 		if estInterval < s {
 			estInterval = s
 		}
-		log.Printf("D! Raw interval %s, padded: %s, estimated: %s", rawInterval, paddedInterval, estInterval)
+		if config.Config.DebugMode {
+			log.Printf("D! resourceType %s Raw interval %s, padded: %s, estimated: %s", resourceType, rawInterval, paddedInterval, estInterval)
+		}
 	}
-	log.Printf("D! Interval estimated to %s", estInterval)
+	if config.Config.DebugMode {
+		log.Printf("D! resourceType %s Interval estimated to %s", resourceType, estInterval)
+	}
 	res.lastColl = localNow
 
 	latest := res.latestSample
 	if !latest.IsZero() {
 		elapsed := now.Sub(latest).Seconds() + 5.0 // Allow 5 second jitter.
-		log.Printf("D! Latest: %s, elapsed: %f, resource: %s", latest, elapsed, resourceType)
+		if config.Config.DebugMode {
+			log.Printf("D! Latest: %s, elapsed: %f, resource: %s", latest, elapsed, resourceType)
+		}
 		if !res.realTime && elapsed < float64(res.sampling) {
 			// No new data would be available. We're outta here!
-			log.Printf("D! Sampling period for %s of %d has not elapsed on %s",
-				resourceType, res.sampling, e.URL.Host)
+			if config.Config.DebugMode {
+				log.Printf("D! Sampling period for %s of %d has not elapsed on %s",
+					resourceType, res.sampling, e.URL.Host)
+			}
 			return nil
 		}
 	} else {
 		latest = now.Add(time.Duration(-res.sampling) * time.Second)
 	}
-	log.Printf("D! Collecting metrics for %d objects of type %s for %s",
-		len(res.objects), resourceType, e.URL.Host)
+	if config.Config.DebugMode {
+		log.Printf("D! Collecting metrics for %d objects of type %s for %s",
+			len(res.objects), resourceType, e.URL.Host)
+	}
 
 	count := int64(0)
 
@@ -1070,12 +1110,15 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 	e.chunkify(ctx, res, now, latest,
 		func(chunk queryChunk) {
 			n, localLatest, err := e.collectChunk(ctx, chunk, res, slist, estInterval)
-			log.Printf("D! CollectChunk for %s returned %d metrics", resourceType, n)
 			if err != nil {
-				//acc.AddError(errors.New("while collecting " + res.name + ": " + err.Error()))
+				if config.Config.DebugMode {
+					log.Printf("D! CollectChunk for %s returned %d metrics   err: %s ", resourceType, n, err)
+				}
 				return
 			}
-			log.Printf("D! CollectChunk for %s returned %d metrics", resourceType, n)
+			if config.Config.DebugMode {
+				log.Printf("D! CollectChunk for %s returned %d metrics", resourceType, n)
+			}
 			atomic.AddInt64(&count, int64(n))
 			tsMux.Lock()
 			defer tsMux.Unlock()
@@ -1083,12 +1126,15 @@ func (e *Endpoint) collectResource(ctx context.Context, resourceType string, sli
 				latestSample = localLatest
 			}
 		})
-
-	log.Printf("D! Latest sample for %s set to %s", resourceType, latestSample)
+	if config.Config.DebugMode {
+		log.Printf("D! Latest sample for %s set to %s", resourceType, latestSample)
+	}
 	if !latestSample.IsZero() {
 		res.latestSample = latestSample
 	}
-	log.Printf("discovered_objects  type is : %s   and number is : %d ", resourceType, count)
+	if config.Config.DebugMode {
+		log.Printf("discovered_objects  type is : %s   and number is : %d ", resourceType, count)
+	}
 
 	return nil
 }
@@ -1102,7 +1148,9 @@ func (e *Endpoint) alignSamples(info []gtypes.PerfSampleInfo, values []int64, in
 		// According to the docs, SampleInfo and Value should have the same length, but we've seen corrupted
 		// data coming back with missing values. Take care of that gracefully!
 		if idx >= len(values) {
-			log.Printf("D! len(SampleInfo)>len(Value) %d > %d during alignment", len(info), len(values))
+			if config.Config.DebugMode {
+				log.Printf("D! len(SampleInfo)>len(Value) %d > %d during alignment", len(info), len(values))
+			}
 			break
 		}
 		v := float64(values[idx])
@@ -1132,12 +1180,16 @@ func (e *Endpoint) alignSamples(info []gtypes.PerfSampleInfo, values []int64, in
 }
 
 func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resourceKind, slist *types.SampleList, interval time.Duration) (int, time.Time, error) {
-	log.Printf("D! Query for %s has %d QuerySpecs", res.name, len(pqs))
+	if config.Config.DebugMode {
+		log.Printf("D! Query for %s has %d QuerySpecs", res.name, len(pqs))
+	}
 	latestSample := time.Time{}
 	count := 0
 	resourceType := res.name
 	prefix := resourceType
-
+	if config.Config.DebugMode {
+		log.Printf("D! collectChunk for %s", resourceType)
+	}
 	client, err := e.clientFactory.GetClient(ctx)
 	if err != nil {
 		return count, latestSample, err
@@ -1150,10 +1202,12 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 
 	ems, err := client.QueryMetrics(ctx, pqs)
 	if err != nil {
+		log.Printf("W! client.QueryMetrics for %s  error is %s", resourceType, err.Error())
 		return count, latestSample, err
 	}
-
-	log.Printf("D! Query for %s returned metrics for %d objects\r\n", resourceType, len(ems))
+	if config.Config.DebugMode {
+		log.Printf("D! Query for %s returned metrics for %d objects\r\n", resourceType, len(ems))
+	}
 
 	// Iterate through results
 	for _, em := range ems {
@@ -1164,6 +1218,9 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 			continue
 		}
 		buckets := make(map[string]metricEntry)
+		if config.Config.DebugMode {
+			log.Printf("D! Query for %s  em.Value len is %d \r\n", resourceType, len(em.Value))
+		}
 		for _, v := range em.Value {
 			name := v.Name
 			t := map[string]string{
@@ -1182,12 +1239,16 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 
 			nValues := 0
 			alignedInfo, alignedValues := e.alignSamples(em.SampleInfo, v.Value, interval)
-
+			if config.Config.DebugMode {
+				log.Printf("D! Query for %s  alignedInfo len is %d \r\n", resourceType, len(alignedInfo))
+			}
 			for idx, sample := range alignedInfo {
 				// According to the docs, SampleInfo and Value should have the same length, but we've seen corrupted
 				// data coming back with missing values. Take care of that gracefully!
 				if idx >= len(alignedValues) {
-					log.Printf("D! Len(SampleInfo)>len(Value) %d > %d\r\n", len(alignedInfo), len(alignedValues))
+					if config.Config.DebugMode {
+						log.Printf("D! Len(SampleInfo)>len(Value) %d > %d\r\n", len(alignedInfo), len(alignedValues))
+					}
 					break
 				}
 				ts := sample.Timestamp
@@ -1198,6 +1259,9 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 
 				// Organize the metrics into a bucket per measurement.
 				mn, fn := e.makeMetricIdentifier(prefix, name)
+				if config.Config.DebugMode {
+					log.Printf("D! makeMetricIdentifier: %s   %s\r\n", prefix, name)
+				}
 				bKey := mn + " " + v.Instance + " " + strconv.FormatInt(ts.UnixNano(), 10)
 				bucket, found := buckets[bKey]
 				if !found {
@@ -1226,7 +1290,9 @@ func (e *Endpoint) collectChunk(ctx context.Context, pqs queryChunk, res *resour
 				e.hwMarks.Put(moid, name, ts)
 			}
 			if nValues == 0 {
-				log.Printf("D! Missing value for: %s, %s", name, objectRef.name)
+				if config.Config.DebugMode {
+					log.Printf("D! Missing value for: %s, %s", name, objectRef.name)
+				}
 				continue
 			}
 		}

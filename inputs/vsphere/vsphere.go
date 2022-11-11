@@ -112,10 +112,6 @@ func (ins *Instance) Init() error {
 		ins.ResourcePoolInclude = []string{"/*/host/**"}
 	}
 
-	if ins.ResourcePoolInclude == nil {
-		ins.ResourcePoolInclude = []string{"/*/host/**"}
-	}
-
 	if ins.VMInclude == nil {
 		ins.VMInclude = []string{"/*/vm/**"}
 	}
@@ -190,7 +186,9 @@ func (v *Instance) Drop() {
 	// after the last Gather() has finished. We do, however, need to
 	// wait for any discovery to complete by trying to grab the
 	// "busy" mutex.
-	log.Printf("D! Waiting for endpoint %q to finish", v.endpoints.URL.Host)
+	if config.Config.DebugMode {
+		log.Printf("D! Waiting for endpoint %q to finish", v.endpoints.URL.Host)
+	}
 	func() {
 		v.endpoints.busy.Lock() // Wait until discovery is finished
 		defer v.endpoints.busy.Unlock()

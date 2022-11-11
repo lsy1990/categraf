@@ -20,6 +20,8 @@ import (
 	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
+
+	"flashcat.cloud/categraf/config"
 )
 
 // The highest number of metrics we can query for, no matter what settings
@@ -121,8 +123,9 @@ func NewClient(ctx context.Context, vSphereURL *url.URL, vs *Instance) (*Client,
 	if vs.Username != "" {
 		vSphereURL.User = url.UserPassword(vs.Username, vs.Password)
 	}
-
-	log.Println("D! Creating client: ", vSphereURL.Host)
+	if config.Config.DebugMode {
+		log.Println("D! Creating client: ", vSphereURL.Host)
+	}
 	soapClient := soap.NewClient(vSphereURL, tlsCfg.InsecureSkipVerify)
 
 	// Add certificate if we have it. Use it to log us in.
@@ -193,7 +196,9 @@ func NewClient(ctx context.Context, vSphereURL *url.URL, vs *Instance) (*Client,
 	if err != nil {
 		return nil, err
 	}
-	log.Println("D! vCenter says max_query_metrics should be ", n)
+	if config.Config.DebugMode {
+		log.Println("D! vCenter says max_query_metrics should be ", n)
+	}
 	if n < vs.MaxQueryMetrics {
 		log.Println("W! Configured max_query_metrics is %d, but server limits it to %d. Reducing.", vs.MaxQueryMetrics, n)
 		vs.MaxQueryMetrics = n
@@ -247,7 +252,9 @@ func (c *Client) GetMaxQueryMetrics(ctx context.Context) (int, error) {
 			if s, ok := res[0].GetOptionValue().Value.(string); ok {
 				v, err := strconv.Atoi(s)
 				if err == nil {
-					log.Println("D! vCenter maxQueryMetrics is defined: %d", v)
+					if config.Config.DebugMode {
+						log.Println("D! vCenter maxQueryMetrics is defined: %d", v)
+					}
 					if v == -1 {
 						// Whatever the server says, we never ask for more metrics than this.
 						return absoluteMaxMetrics, nil
@@ -258,7 +265,7 @@ func (c *Client) GetMaxQueryMetrics(ctx context.Context) (int, error) {
 			// Fall through version-based inference if value isn't usable
 		}
 	} else {
-		log.Println("D! Option query for maxQueryMetrics failed. Using default")
+		log.Println("W! Option query for maxQueryMetrics failed. Using default")
 	}
 
 	// No usable maxQueryMetrics setting. Infer based on version
@@ -268,7 +275,7 @@ func (c *Client) GetMaxQueryMetrics(ctx context.Context) (int, error) {
 		log.Println("W! vCenter returned an invalid version string: %s. Using default query size=64", ver)
 		return 64, nil
 	}
-	log.Println("D! vCenter version is: ", ver)
+	log.Println("I! vCenter version is: ", ver)
 	major, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return 0, err

@@ -74,7 +74,7 @@ func (f *Finder) findResources(ctx context.Context, resType, path string, objs m
 	if err != nil {
 		return err
 	}
-	log.Printf("D! Find(%s, %s) returned %d objects\r\n", resType, path, len(objs))
+	log.Printf("I! Find(%s, %s) returned %d objects\r\n", resType, path, len(objs))
 	return nil
 }
 

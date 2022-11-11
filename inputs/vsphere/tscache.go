@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"flashcat.cloud/categraf/config"
 )
 
 // TSCache is a cache of timestamps used to determine the validity of datapoints
@@ -33,7 +35,9 @@ func (t *TSCache) Purge() {
 			n++
 		}
 	}
-	log.Println(fmt.Sprintf("D! purged timestamp cache. %d deleted with %d remaining", n, len(t.table)))
+	if config.Config.DebugMode {
+		log.Println(fmt.Sprintf("D! purged timestamp cache. %d deleted with %d remaining", n, len(t.table)))
+	}
 }
 
 // IsNew returns true if the supplied timestamp for the supplied key is more recent than the
