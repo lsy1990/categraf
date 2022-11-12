@@ -571,7 +571,11 @@ func (e *Endpoint) complexMetadataSelect(ctx context.Context, res *resourceKind,
 	}
 
 	instInfoMux := sync.Mutex{}
-	te := NewThrottledExecutor(e.Parent.DiscoverConcurrency)
+	te,err := NewThrottledExecutor(e.Parent.DiscoverConcurrency)
+	if err !=nil {
+		log.Println("E! NewThrottledExecutor",err.Error())
+		return
+	}
 	for _, obj := range sampledObjects {
 		func(obj *objectRef) {
 			te.Run(ctx, func() {
@@ -949,7 +953,11 @@ func submitChunkJob(ctx context.Context, te *ThrottledExecutor, job queryJob, pq
 }
 
 func (e *Endpoint) chunkify(ctx context.Context, res *resourceKind, now time.Time, latest time.Time, job queryJob) {
-	te := NewThrottledExecutor(e.Parent.CollectConcurrency)
+	te, err:= NewThrottledExecutor(e.Parent.CollectConcurrency)
+	if err!= nil {
+		log.Println("E! NewThrottledExecutor",err.Error())
+		return
+	}
 	maxMetrics := e.Parent.MaxQueryMetrics
 	if maxMetrics < 1 {
 		maxMetrics = 1

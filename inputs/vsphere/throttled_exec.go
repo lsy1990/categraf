@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -14,11 +15,11 @@ type ThrottledExecutor struct {
 
 // NewThrottledExecutor creates a new ThrottlesExecutor with a specified maximum
 // number of concurrent jobs
-func NewThrottledExecutor(limit int) *ThrottledExecutor {
+func NewThrottledExecutor(limit int) (*ThrottledExecutor,error) {
 	if limit == 0 {
-		panic("Limit must be > 0")
+		return  nil,fmt.Errorf("Limit must be > 0")
 	}
-	return &ThrottledExecutor{limiter: make(chan struct{}, limit)}
+	return &ThrottledExecutor{limiter: make(chan struct{}, limit)},nil
 }
 
 // Run schedules a job for execution as soon as possible while respecting the
