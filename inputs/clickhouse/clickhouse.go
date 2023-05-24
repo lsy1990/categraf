@@ -9,20 +9,34 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"strconv"
 	"strings"
 	"time"
+
 
 	"flashcat.cloud/categraf/config"
 	"flashcat.cloud/categraf/inputs"
 	"flashcat.cloud/categraf/pkg/stringx"
 	"flashcat.cloud/categraf/pkg/tls"
 	"flashcat.cloud/categraf/types"
+
+	"github.com/tidwall/gjson"
 )
 
 const inputName = "clickhouse"
 
 var defaultTimeout = 5 * time.Second
+
+type MetricConfig struct {
+	Mesurement       string          `toml:"mesurement"`
+	LabelFields      []string        `toml:"label_fields"`
+	MetricFields     []string        `toml:"metric_fields"`
+	FieldToAppend    string          `toml:"field_to_append"`
+	Timeout          config.Duration `toml:"timeout"`
+	Request          string          `toml:"request"`
+	IgnoreZeroResult bool            `toml:"ignore_zero_result"`
+}
 
 type Instance struct {
 	config.InstanceConfig
@@ -33,6 +47,7 @@ type Instance struct {
 	ClusterInclude []string        `toml:"cluster_include"`
 	ClusterExclude []string        `toml:"cluster_exclude"`
 	Timeout        config.Duration `toml:"timeout"`
+	Metrics        []MetricConfig  `toml:"metrics"`
 	HTTPClient     *http.Client
 	tls.ClientConfig
 }
@@ -43,6 +58,7 @@ type connect struct {
 	Hostname string `json:"host_name"`
 	url      *url.URL
 }
+
 
 func (ins *Instance) Init() error {
 	if len(ins.Servers) == 0 {
@@ -172,6 +188,18 @@ func (ins *Instance) Gather(slist *types.SampleList) {
 				log.Println("E! failed to exec query commonMetrics error:", err)
 			}
 		}
+
+		waitMetrics := new(sync.WaitGroup)
+
+		for i := 0; i < len(ins.Metrics); i++ {
+			m := ins.Metrics[i]
+			waitMetrics.Add(1)
+			//tags := map[string]string{"address": ins.Address}
+			//go ins.scrapeMetric(waitMetrics, slist, m, tags)
+			go  ins.execCustomQuery(&connects[i],waitMetrics,slist,m)
+		}
+		waitMetrics.Wait()
+
 	}
 	return
 }
@@ -377,6 +405,7 @@ func (ins *Instance) disks(slist *types.SampleList, conn *connect) error {
 	return nil
 }
 
+
 func (ins *Instance) processes(slist *types.SampleList, conn *connect) error {
 	var processesStats []struct {
 		QueryType      string  `json:"query_type"`
@@ -512,6 +541,85 @@ func (ins *Instance) execQuery(address *url.URL, query string, i interface{}) er
 	}
 	return nil
 }
+
+
+func (ins *Instance) execCustomQuery(conn *connect,waitMetrics *sync.WaitGroup, slist *types.SampleList, metricConf MetricConfig) error {
+	defer waitMetrics.Done()
+	address := conn.url
+	q := address.Query()
+	q.Set("query", metricConf.Request+" FORMAT JSON")
+	address.RawQuery = q.Encode()
+	req, _ := http.NewRequest("GET", address.String(), nil)
+	if ins.Username != "" {
+		req.Header.Add("X-ClickHouse-User", ins.Username)
+	}
+	if ins.Password != "" {
+		req.Header.Add("X-ClickHouse-Key", ins.Password)
+	}
+	resp, err := ins.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
+		return &clickhouseError{
+			StatusCode: resp.StatusCode,
+			body:       body,
+		}
+	}
+	var response struct {
+		Data json.RawMessage
+	}
+	//tags := ins.makeDefaultTags(conn)
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return err
+	}
+	customMetricsArray := gjson.Get(string(response.Data), "data")
+	//if err := json.Unmarshal(response.Data, i); err != nil {
+	//	return err
+	//}
+	fmt.Println("customMetricsArray",":",customMetricsArray)
+
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return err
+	}
+
+	//slist.PushFront(types.NewSample("clickhouse_zookeeper", "root_nodes", uint64(zkRootNodes[0].ZkRootNodes), tags))
+	return nil
+}
+
+func parseArray(anArray []interface{}) {
+	for i, val := range anArray {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			fmt.Println("Index:", i)
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			fmt.Println("Index:", i)
+			parseArray(val.([]interface{}))
+		default:
+			fmt.Println("Index", i, ":", concreteVal)
+
+		}
+	}
+}
+
+func parseMap(aMap map[string]interface{}) {
+	for key, val := range aMap {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			fmt.Println(key)
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			fmt.Println(key)
+			parseArray(val.([]interface{}))
+		default:
+			fmt.Println(key, ":", concreteVal)
+		}
+	}
+}
+
 
 // see https://clickhouse.yandex/docs/en/operations/settings/settings/#session_settings-output_format_json_quote_64bit_integers
 type chUInt64 uint64
