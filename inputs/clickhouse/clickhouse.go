@@ -9,14 +9,14 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sync"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
-
 
 	"flashcat.cloud/categraf/config"
 	"flashcat.cloud/categraf/inputs"
+	"flashcat.cloud/categraf/pkg/conv"
 	"flashcat.cloud/categraf/pkg/stringx"
 	"flashcat.cloud/categraf/pkg/tls"
 	"flashcat.cloud/categraf/types"
@@ -58,7 +58,6 @@ type connect struct {
 	Hostname string `json:"host_name"`
 	url      *url.URL
 }
-
 
 func (ins *Instance) Init() error {
 	if len(ins.Servers) == 0 {
@@ -188,7 +187,7 @@ func (ins *Instance) Gather(slist *types.SampleList) {
 				log.Println("E! failed to exec query commonMetrics error:", err)
 			}
 		}
-
+		log.Println("E!metrics=", len(ins.Metrics))
 		waitMetrics := new(sync.WaitGroup)
 
 		for i := 0; i < len(ins.Metrics); i++ {
@@ -196,7 +195,7 @@ func (ins *Instance) Gather(slist *types.SampleList) {
 			waitMetrics.Add(1)
 			//tags := map[string]string{"address": ins.Address}
 			//go ins.scrapeMetric(waitMetrics, slist, m, tags)
-			go  ins.execCustomQuery(&connects[i],waitMetrics,slist,m)
+			go ins.execCustomQuery(&connects[i], waitMetrics, slist, m)
 		}
 		waitMetrics.Wait()
 
@@ -405,7 +404,6 @@ func (ins *Instance) disks(slist *types.SampleList, conn *connect) error {
 	return nil
 }
 
-
 func (ins *Instance) processes(slist *types.SampleList, conn *connect) error {
 	var processesStats []struct {
 		QueryType      string  `json:"query_type"`
@@ -542,8 +540,7 @@ func (ins *Instance) execQuery(address *url.URL, query string, i interface{}) er
 	return nil
 }
 
-
-func (ins *Instance) execCustomQuery(conn *connect,waitMetrics *sync.WaitGroup, slist *types.SampleList, metricConf MetricConfig) error {
+func (ins *Instance) execCustomQuery(conn *connect, waitMetrics *sync.WaitGroup, slist *types.SampleList, metricConf MetricConfig) error {
 	defer waitMetrics.Done()
 	address := conn.url
 	q := address.Query()
@@ -569,17 +566,34 @@ func (ins *Instance) execCustomQuery(conn *connect,waitMetrics *sync.WaitGroup, 
 		}
 	}
 	var response struct {
-		Data json.RawMessage
+		Data []json.RawMessage `json:"data"`
 	}
-	//tags := ins.makeDefaultTags(conn)
+	tags := ins.makeDefaultTags(conn)
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return err
 	}
-	customMetricsArray := gjson.Get(string(response.Data), "data")
-	//if err := json.Unmarshal(response.Data, i); err != nil {
-	//	return err
-	//}
-	fmt.Println("customMetricsArray",":",customMetricsArray)
+	log.Println("content:", len(response.Data))
+	for _, item := range response.Data {
+		localTags := tags
+		for _, label := range metricConf.LabelFields {
+			localTags[label] = gjson.Get(string(item), label).String()
+		}
+
+		for _, column := range metricConf.MetricFields {
+			value, err := conv.ToFloat64(gjson.Get(string(item), column).String())
+			if err != nil {
+				log.Println("E! failed to convert field:", column, "value:", value, "error:", err)
+				return err
+			}
+
+			if metricConf.FieldToAppend == "" {
+				slist.PushSample(inputName, metricConf.Mesurement+"_"+column, value, localTags)
+			} else {
+				suffix := cleanName(gjson.Get(string(item), metricConf.FieldToAppend).String())
+				slist.PushSample(inputName, metricConf.Mesurement+"_"+suffix+"_"+column, value, localTags)
+			}
+		}
+	}
 
 	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 		return err
@@ -588,38 +602,16 @@ func (ins *Instance) execCustomQuery(conn *connect,waitMetrics *sync.WaitGroup, 
 	//slist.PushFront(types.NewSample("clickhouse_zookeeper", "root_nodes", uint64(zkRootNodes[0].ZkRootNodes), tags))
 	return nil
 }
-
-func parseArray(anArray []interface{}) {
-	for i, val := range anArray {
-		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			fmt.Println("Index:", i)
-			parseMap(val.(map[string]interface{}))
-		case []interface{}:
-			fmt.Println("Index:", i)
-			parseArray(val.([]interface{}))
-		default:
-			fmt.Println("Index", i, ":", concreteVal)
-
-		}
-	}
+func cleanName(s string) string {
+	s = strings.Replace(s, " ", "_", -1) // Remove spaces
+	s = strings.Replace(s, "(", "", -1)  // Remove open parenthesis
+	s = strings.Replace(s, ")", "", -1)  // Remove close parenthesis
+	s = strings.Replace(s, "/", "", -1)  // Remove forward slashes
+	s = strings.Replace(s, "*", "", -1)  // Remove asterisks
+	s = strings.Replace(s, "%", "percent", -1)
+	s = strings.ToLower(s)
+	return s
 }
-
-func parseMap(aMap map[string]interface{}) {
-	for key, val := range aMap {
-		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			fmt.Println(key)
-			parseMap(val.(map[string]interface{}))
-		case []interface{}:
-			fmt.Println(key)
-			parseArray(val.([]interface{}))
-		default:
-			fmt.Println(key, ":", concreteVal)
-		}
-	}
-}
-
 
 // see https://clickhouse.yandex/docs/en/operations/settings/settings/#session_settings-output_format_json_quote_64bit_integers
 type chUInt64 uint64
